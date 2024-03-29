@@ -216,12 +216,22 @@ class MultipleChoicePipeline(Pipeline):
         :return: The logit scores assigned to each next-token prediction
             as well as the input_ids tensor from input_
         """
+        '''
         with torch.no_grad():
             # Correctly use 'input_' as the argument to the model
             model_output = self.model(**input_)
         # Ensure 'input_ids' are included in the output for downstream processing
         forward_output = {"input_ids": input_["input_ids"], "logits": model_output.logits}
         return forward_output
+        '''
+        with torch.no_grad():
+            # Prepare model input, excluding unexpected arguments
+            model_input = {key: value for key, value in input_.items() if key not in ['pad_token_id']}
+            # Call the model with the cleaned input
+            model_output = self.model(**model_input)
+        forward_output = {"input_ids": input_["input_ids"], "logits": model_output.logits}
+        return forward_output
+        
 
     def postprocess(self, outputs: Dict[str, torch.Tensor]) -> Output:
         """
