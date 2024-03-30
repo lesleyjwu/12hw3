@@ -169,13 +169,12 @@ class MultipleChoicePipeline(Pipeline):
         input_texts = []
         for question, choices in zip(batch['question'], batch['choices']):
             for choice in choices:
-                # If demonstrations are set, prepend them
+                # If demonstrations are set, prepend the demonstration
                 demo_text = self._demos if self._demos else ""
                 # If a system prompt is set, prepend it to the answer choice
                 system_prompt_text = self._system_prompt if self._system_prompt else ""
                 input_text = f"{demo_text}Q: {question}\nA:{system_prompt_text} {choice}"
                 input_texts.append(input_text)
-    
         return input_texts
 
     def preprocess(self, batch: Dict[str, Any]) -> Dict[str, torch.Tensor]:
@@ -198,8 +197,7 @@ class MultipleChoicePipeline(Pipeline):
         input_texts = self._get_input_texts(batch)
         # Tokenize the input texts
         inputs = self.tokenizer(input_texts, padding=True, truncation=True, return_tensors="pt")
-        inputs.pop('pad_token_id', None)
-        # Move tensors to the appropriate device (GPU if available)
+        # Move tensors to the appropriate device (use GPU if available)
         inputs = {name: tensor.to(self.device) for name, tensor in inputs.items()}
         return inputs
     
@@ -217,20 +215,11 @@ class MultipleChoicePipeline(Pipeline):
         :return: The logit scores assigned to each next-token prediction
             as well as the input_ids tensor from input_
         """
-        
         with torch.no_grad():
             model_output = self.model(**input_)
+        #return the  logit scores for the LLM's next-token predictions and the tokenized input text
         forward_output = {"input_ids": input_["input_ids"], "logits": model_output.logits}
         return forward_output
-        '''
-        with torch.no_grad():
-            # Prepare model input, excluding unexpected arguments
-            model_input = {key: value for key, value in input_.items() if key not in ['pad_token_id']}
-            # Call the model with the cleaned input
-            model_output = self.model(**model_input)
-        forward_output = {"input_ids": input_["input_ids"], "logits": model_output.logits}
-        return forward_output
-        '''
 
     def postprocess(self, outputs: Dict[str, torch.Tensor]) -> Output:
         """
@@ -261,16 +250,13 @@ class MultipleChoicePipeline(Pipeline):
         # Compute token-wise cross-entropy loss
         loss = self.loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         loss = loss.view(shift_logits.size(0), -1)  # Reshape to [batch_size, seq_length - 1]
-
-        # Now, loss must be reshaped to [num_questions, num_choices, seq_length - 1]
-        # To compute the number of questions (batch_size / num_choices), which is needed for correct reshaping
         num_questions = loss.size(0) // self.num_choices
         loss_per_question_choice = loss.view(num_questions, self.num_choices, -1)
         
-        # Sum across the token dimension to get the total loss per answer choice
+        # total loss per answer choice
         loss_per_choice = loss_per_question_choice.sum(dim=2)
         
-        # Find the answer with the minimum loss for each question
+        #answer with the minimum loss
         predictions = torch.argmin(loss_per_choice, dim=1)
         return Output(loss=loss_per_choice.cpu().numpy(), prediction=predictions.cpu().numpy())
 
