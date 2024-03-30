@@ -196,7 +196,7 @@ class MultipleChoicePipeline(Pipeline):
         # Generate the input texts for the batch
         input_texts = self._get_input_texts(batch)
         # Tokenize the input texts
-        inputs = self.tokenizer(input_texts, padding=True, truncation=True, return_tensors="pt")
+        inputs = self.tokenizer(input_texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
         # Move tensors to the appropriate device (use GPU if available)
         inputs = {name: tensor.to(self.device) for name, tensor in inputs.items()}
         return inputs
